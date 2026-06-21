@@ -5,7 +5,7 @@
 ;; Author: Ran Wang
 ;; Maintainer: liyanan <liyananfamily@gmail.com>
 ;; URL: https://github.com/unship/org-remark-posframe
-;; Version: 0.3.3
+;; Version: 0.4.0
 ;; Package-Requires: ((emacs "27.1") (org "9.4") (posframe "1.0.0") (org-remark "1.0.0"))
 ;; Keywords: convenience, outlines, hypermedia
 
@@ -60,6 +60,7 @@
 ;;; Code:
 
 (require 'org)
+(require 'color)
 (require 'posframe)
 (require 'org-remark)
 
@@ -103,17 +104,27 @@ covered.  See `posframe-show' for other available handlers."
   "Width in pixels of the preview posframe's internal border."
   :type 'integer)
 
-(defcustom org-remark-posframe-background-color "#93937070DBDB"
-  "Background color of the preview posframe for a plain note."
-  :type 'color)
+(defcustom org-remark-posframe-tint-strength 0.15
+  "How strongly theme-derived posframe colors are tinted, from 0.0 to 1.0.
+Lower is more subtle.  Used for any color option left nil, which blends a
+faint hue into the current theme's background so the posframe stays
+low-saturation and adapts to light or dark themes."
+  :type 'number)
 
-(defcustom org-remark-posframe-todo-color "#ff4500"
-  "Background color of the preview posframe when the note is a TODO."
-  :type 'color)
+(defcustom org-remark-posframe-background-color nil
+  "Background color of the preview posframe for a plain note.
+When nil, derive a subtle neutral tint from the current theme."
+  :type '(choice (const :tag "Derive from theme" nil) color))
 
-(defcustom org-remark-posframe-done-color "#7cfc00"
-  "Background color of the preview posframe when the note is done."
-  :type 'color)
+(defcustom org-remark-posframe-todo-color nil
+  "Background color of the preview posframe when the note is a TODO.
+When nil, derive a subtle red tint from the current theme."
+  :type '(choice (const :tag "Derive from theme" nil) color))
+
+(defcustom org-remark-posframe-done-color nil
+  "Background color of the preview posframe when the note is done.
+When nil, derive a subtle green tint from the current theme."
+  :type '(choice (const :tag "Derive from theme" nil) color))
 
 (defcustom org-remark-posframe-auto-delay 0.2
   "Idle seconds before `org-remark-posframe-auto-mode' shows the posframe.
@@ -129,6 +140,32 @@ A value of 0 previews as soon as Emacs is idle (effectively immediate)."
 
 (defvar org-remark-posframe--auto-shown-id nil
   "Id of the highlight currently previewed by `org-remark-posframe-auto-mode'.")
+
+(defun org-remark-posframe--tint (color)
+  "Return COLOR blended into the default background.
+The blend uses `org-remark-posframe-tint-strength', yielding a subtle,
+theme-adapted, low-saturation color.  Return COLOR unchanged when colors
+cannot be resolved (e.g. on a terminal without colors)."
+  (let ((f org-remark-posframe-tint-strength)
+        (bg (color-name-to-rgb (or (face-background 'default nil t) "white")))
+        (fg (color-name-to-rgb (or color "gray"))))
+    (if (and bg fg)
+        (color-rgb-to-hex
+         (+ (* (- 1.0 f) (nth 0 bg)) (* f (nth 0 fg)))
+         (+ (* (- 1.0 f) (nth 1 bg)) (* f (nth 1 fg)))
+         (+ (* (- 1.0 f) (nth 2 bg)) (* f (nth 2 fg)))
+         2)
+      color)))
+
+(defun org-remark-posframe--color (kind)
+  "Return the posframe background color for KIND.
+KIND is `todo', `done', or anything else for a plain note.  Use the
+matching user option when set, else derive a subtle tint from the theme."
+  (pcase kind
+    ('todo (or org-remark-posframe-todo-color (org-remark-posframe--tint "red")))
+    ('done (or org-remark-posframe-done-color (org-remark-posframe--tint "green")))
+    (_     (or org-remark-posframe-background-color
+               (org-remark-posframe--tint "SlateGray")))))
 
 (defun org-remark-posframe--note-contents (id)
   "Return the marginal note identified by ID as (CONTENTS . COLOR).
@@ -154,10 +191,10 @@ resolves to the correct marginal notes file."
              (goto-char pos)
              (org-back-to-heading t)
              (let* ((color (cond ((org-entry-is-done-p)
-                                  org-remark-posframe-done-color)
+                                  (org-remark-posframe--color 'done))
                                  ((org-entry-is-todo-p)
-                                  org-remark-posframe-todo-color)
-                                 (t org-remark-posframe-background-color)))
+                                  (org-remark-posframe--color 'todo))
+                                 (t (org-remark-posframe--color 'plain))))
                     (heading (buffer-substring-no-properties
                               (line-beginning-position)
                               (line-end-position)))

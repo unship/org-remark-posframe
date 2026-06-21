@@ -79,9 +79,13 @@ Click a link inside the posframe to jump to its target.
   ~org-remark-posframe-poshandler-below-region~ (below the whole highlight). Any
   [[https://github.com/tumashu/posframe][posframe]] handler also works, e.g.
   ~posframe-poshandler-window-bottom-right-corner~ to pin it to a window corner.
-- ~org-remark-posframe-background-color~ — background for a plain note.
+- ~org-remark-posframe-background-color~ — background for a plain note. When
+  nil (the default), a subtle tint is derived from the current theme.
 - ~org-remark-posframe-todo-color~ / ~org-remark-posframe-done-color~ —
-  background tint when the note's heading is a TODO / DONE entry.
+  background when the note's heading is a TODO / DONE entry. Nil by default
+  (a soft red / green tint derived from the theme).
+- ~org-remark-posframe-tint-strength~ — how strongly theme-derived colors are
+  tinted (0.0–1.0, default 0.15). Lower is more subtle.
 - ~org-remark-posframe-internal-border-width~ — border width in pixels.
 - ~org-remark-posframe-auto-delay~ — idle seconds before
   ~org-remark-posframe-auto-mode~ shows the posframe (default 0.2).
