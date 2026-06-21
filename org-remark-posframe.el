@@ -5,7 +5,7 @@
 ;; Author: Ran Wang
 ;; Maintainer: liyanan <liyananfamily@gmail.com>
 ;; URL: https://github.com/unship/org-remark-posframe
-;; Version: 0.3.0
+;; Version: 0.3.1
 ;; Package-Requires: ((emacs "27.1") (org "9.4") (posframe "1.0.0") (org-remark "1.0.0"))
 ;; Keywords: convenience, outlines, hypermedia
 
@@ -160,6 +160,10 @@ by default places it below POINT so the highlighted text stays visible."
             (erase-buffer)
             (insert (car note))
             (delay-mode-hooks (org-mode))
+            ;; Org folds headings per `org-startup-folded'; show the whole note
+            ;; so the body is not hidden in the posframe.
+            (funcall (if (fboundp 'org-fold-show-all)
+                         'org-fold-show-all 'org-show-all))
             (unless org-link-descriptive
               (add-to-invisibility-spec '(org-link))))
           (when (posframe-workable-p)
