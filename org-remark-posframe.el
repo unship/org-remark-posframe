@@ -5,7 +5,7 @@
 ;; Author: Ran Wang
 ;; Maintainer: liyanan <liyananfamily@gmail.com>
 ;; URL: https://github.com/unship/org-remark-posframe
-;; Version: 0.3.1
+;; Version: 0.3.2
 ;; Package-Requires: ((emacs "27.1") (org "9.4") (posframe "1.0.0") (org-remark "1.0.0"))
 ;; Keywords: convenience, outlines, hypermedia
 
@@ -68,12 +68,34 @@
   :prefix "org-remark-posframe-"
   :link '(url-link :tag "GitHub" "https://github.com/unship/org-remark-posframe"))
 
+(defvar org-remark-posframe--region nil
+  "Cons (X-POS . Y-POS) of buffer positions for the highlight being previewed.
+X-POS is the start of the highlight (left edge); Y-POS is a position on
+its last line (so the posframe clears the whole region).  Bound around
+`posframe-show' for `org-remark-posframe-poshandler-below-region'.")
+
+(defun org-remark-posframe-poshandler-below-region (info)
+  "Place the posframe below the whole highlighted region.
+INFO is the plist `posframe-show' passes to position handlers.  The left
+edge aligns with the region's start column and the top sits below the
+region's last line, so no part of a multi-line or wrapped highlight is
+covered.  The region is taken from `org-remark-posframe--region'; without
+it this falls back to `posframe-poshandler-point-bottom-left-corner'."
+  (if (not org-remark-posframe--region)
+      (posframe-poshandler-point-bottom-left-corner info)
+    (cons (car (posframe-poshandler-point-1
+                (plist-put (copy-sequence info)
+                           :position (car org-remark-posframe--region))))
+          (cdr (posframe-poshandler-point-1
+                (plist-put (copy-sequence info)
+                           :position (cdr org-remark-posframe--region)))))))
+
 (defcustom org-remark-posframe-poshandler
-  #'posframe-poshandler-point-bottom-left-corner
+  #'org-remark-posframe-poshandler-below-region
   "Position handler used to place the preview posframe.
-The default places the posframe at the bottom-left corner of point,
-i.e. just below the highlight, so the highlighted text remains
-visible.  See `posframe-show' for the available handlers."
+The default, `org-remark-posframe-poshandler-below-region', places the
+posframe just below the whole highlighted region so the highlight is not
+covered.  See `posframe-show' for other available handlers."
   :type 'function)
 
 (defcustom org-remark-posframe-internal-border-width 2
@@ -113,7 +135,11 @@ CONTENTS is a string with the note's heading and body, with the
 PROPERTIES drawer and planning lines removed.  COLOR is chosen from
 the entry's TODO state and one of `org-remark-posframe-todo-color',
 `org-remark-posframe-done-color' or `org-remark-posframe-background-color'.
-Return nil when no entry with `org-remark-prop-id' equal to ID is found.
+
+Return nil when no matching entry is found, and also when the entry has
+no body and its heading is just the highlighted text (the
+`org-remark-original-text' property): previewing it would only repeat the
+source, so there is nothing useful to show.
 
 Call this from the source buffer so that `org-remark-notes-get-file-name'
 resolves to the correct marginal notes file."
@@ -133,45 +159,59 @@ resolves to the correct marginal notes file."
                     (heading (buffer-substring-no-properties
                               (line-beginning-position)
                               (line-end-position)))
+                    (title (org-get-heading t t t t))
+                    (original (org-entry-get nil "org-remark-original-text"))
                     (body-beg (save-excursion (org-end-of-meta-data t) (point)))
                     (body-end (save-excursion (org-end-of-subtree t t) (point)))
                     (body (if (< body-beg body-end)
                               (string-trim
                                (buffer-substring-no-properties body-beg body-end))
                             "")))
-               (cons (if (string-empty-p body)
-                         heading
-                       (concat heading "\n" body))
-                     color)))))))))
+               (cond
+                ;; Heading only, and it is just the highlighted text: a preview
+                ;; would merely repeat the source, so show nothing.
+                ((and (string-empty-p body) original (string= title original))
+                 nil)
+                ((string-empty-p body) (cons heading color))
+                (t (cons (concat heading "\n" body) color)))))))))))
 
 ;;;###autoload
 (defun org-remark-posframe-show (point)
   "Preview the Org-remark note for the highlight at POINT in a posframe.
-The posframe is positioned by `org-remark-posframe-poshandler', which
-by default places it below POINT so the highlighted text stays visible."
+The posframe is positioned by `org-remark-posframe-poshandler', which by
+default places it below the whole highlighted region so the highlight is
+not covered.  Nothing is shown when there is no note to preview (no
+highlight, or a note whose only content is the highlighted text); a
+message is emitted only when called interactively."
   (interactive "d")
-  (let ((id (get-char-property point 'org-remark-id)))
-    (if (null id)
-        (message "org-remark-posframe: no highlight at point")
-      (let ((note (org-remark-posframe--note-contents id)))
-        (if (null note)
-            (message "org-remark-posframe: no note found for the highlight")
-          (with-current-buffer (get-buffer-create org-remark-posframe-buffer)
-            (erase-buffer)
-            (insert (car note))
-            (delay-mode-hooks (org-mode))
-            ;; Org folds headings per `org-startup-folded'; show the whole note
-            ;; so the body is not hidden in the posframe.
-            (funcall (if (fboundp 'org-fold-show-all)
-                         'org-fold-show-all 'org-show-all))
-            (unless org-link-descriptive
-              (add-to-invisibility-spec '(org-link))))
-          (when (posframe-workable-p)
-            (posframe-show
-             org-remark-posframe-buffer
-             :poshandler org-remark-posframe-poshandler
-             :internal-border-width org-remark-posframe-internal-border-width
-             :background-color (cdr note))))))))
+  (let* ((id (get-char-property point 'org-remark-id))
+         (note (and id (org-remark-posframe--note-contents id))))
+    (if (null note)
+        (when (called-interactively-p 'interactive)
+          (message "org-remark-posframe: nothing to preview here"))
+      (with-current-buffer (get-buffer-create org-remark-posframe-buffer)
+        (erase-buffer)
+        (insert (car note))
+        (delay-mode-hooks (org-mode))
+        ;; Org folds headings per `org-startup-folded'; show the whole note
+        ;; so the body is not hidden in the posframe.
+        (funcall (if (fboundp 'org-fold-show-all)
+                     'org-fold-show-all 'org-show-all))
+        (unless org-link-descriptive
+          (add-to-invisibility-spec '(org-link))))
+      (when (posframe-workable-p)
+        (let* ((ov (and (fboundp 'org-remark-find-overlay-at-point)
+                        (org-remark-find-overlay-at-point point)))
+               (beg (and ov (overlay-start ov)))
+               (end (and ov (overlay-end ov)))
+               (org-remark-posframe--region
+                (and beg end (< beg end) (cons beg (max beg (1- end))))))
+          (posframe-show
+           org-remark-posframe-buffer
+           :position (or beg point)
+           :poshandler org-remark-posframe-poshandler
+           :internal-border-width org-remark-posframe-internal-border-width
+           :background-color (cdr note)))))))
 
 (defun org-remark-posframe--move-and-show (move-fn)
   "Move with MOVE-FN to a highlight, then preview its note in a posframe.
