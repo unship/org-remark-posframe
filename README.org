@@ -6,8 +6,9 @@ Org-remark-posframe previews the marginal note
 ([[https://github.com/nobiot/org-remark][Org-remark]]) for the highlight at
 point in a child frame (posframe).
 
-By default the posframe appears *just below* the highlight, so the highlighted
-text stays visible while you read its note.  With
+By default the posframe appears *just below* the whole highlight (so multi-line
+highlights are not covered) and shows the note body; a highlight whose note is
+empty (its heading is only the original text) is not previewed.  With
 ~org-remark-posframe-auto-mode~ it appears automatically when point rests on a
 highlight and disappears when point leaves it.
 
@@ -75,8 +76,8 @@ Click a link inside the posframe to jump to its target.
 * Customization
 ~M-x customize-group RET org-remark-posframe~.
 - ~org-remark-posframe-poshandler~ — where the posframe appears. Default
-  ~posframe-poshandler-point-bottom-left-corner~ (below the highlight). Any
-  [[https://github.com/tumashu/posframe][posframe]] handler works, e.g.
+  ~org-remark-posframe-poshandler-below-region~ (below the whole highlight). Any
+  [[https://github.com/tumashu/posframe][posframe]] handler also works, e.g.
   ~posframe-poshandler-window-bottom-right-corner~ to pin it to a window corner.
 - ~org-remark-posframe-background-color~ — background for a plain note.
 - ~org-remark-posframe-todo-color~ / ~org-remark-posframe-done-color~ —

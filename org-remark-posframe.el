@@ -5,7 +5,7 @@
 ;; Author: Ran Wang
 ;; Maintainer: liyanan <liyananfamily@gmail.com>
 ;; URL: https://github.com/unship/org-remark-posframe
-;; Version: 0.3.2
+;; Version: 0.3.3
 ;; Package-Requires: ((emacs "27.1") (org "9.4") (posframe "1.0.0") (org-remark "1.0.0"))
 ;; Keywords: convenience, outlines, hypermedia
 
@@ -29,10 +29,11 @@
 ;; Preview the Org-remark (https://github.com/nobiot/org-remark) marginal
 ;; note for the highlight at point in a child frame (posframe).
 ;;
-;; By default the posframe is placed just below point, so the highlighted
-;; text stays visible while you read its note.  The position is controlled
-;; by `org-remark-posframe-poshandler' and can be set to any posframe
-;; position handler.
+;; By default the posframe is placed just below the whole highlighted
+;; region (controlled by `org-remark-posframe-poshandler'), so the
+;; highlight stays visible while you read its note.  A note whose heading
+;; merely repeats the highlighted text shows only its body, and a highlight
+;; with no note body is not previewed at all.
 ;;
 ;; Commands:
 ;;
@@ -136,10 +137,11 @@ PROPERTIES drawer and planning lines removed.  COLOR is chosen from
 the entry's TODO state and one of `org-remark-posframe-todo-color',
 `org-remark-posframe-done-color' or `org-remark-posframe-background-color'.
 
-Return nil when no matching entry is found, and also when the entry has
-no body and its heading is just the highlighted text (the
-`org-remark-original-text' property): previewing it would only repeat the
-source, so there is nothing useful to show.
+The heading is omitted when it merely repeats the highlighted text (the
+`org-remark-original-text' property); a custom heading is kept.
+
+Return nil when no matching entry is found, and when the note has no body
+and only such a redundant heading -- there would be nothing to show.
 
 Call this from the source buffer so that `org-remark-notes-get-file-name'
 resolves to the correct marginal notes file."
@@ -167,13 +169,15 @@ resolves to the correct marginal notes file."
                               (string-trim
                                (buffer-substring-no-properties body-beg body-end))
                             "")))
-               (cond
-                ;; Heading only, and it is just the highlighted text: a preview
-                ;; would merely repeat the source, so show nothing.
-                ((and (string-empty-p body) original (string= title original))
-                 nil)
-                ((string-empty-p body) (cons heading color))
-                (t (cons (concat heading "\n" body) color)))))))))))
+               (let ((redundant (and original (string= title original))))
+                 (cond
+                  ;; No body: keep a custom heading for context, but drop one
+                  ;; that just repeats the highlighted text -- show nothing.
+                  ((string-empty-p body) (unless redundant (cons heading color)))
+                  ;; Body present: omit a heading that merely repeats the
+                  ;; highlighted text; show the body alone.  Keep a custom one.
+                  (redundant (cons body color))
+                  (t (cons (concat heading "\n" body) color))))))))))))
 
 ;;;###autoload
 (defun org-remark-posframe-show (point)
