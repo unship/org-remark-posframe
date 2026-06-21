@@ -152,19 +152,28 @@ by default places it below POINT so the highlighted text stays visible."
              :internal-border-width org-remark-posframe-internal-border-width
              :background-color (cdr note))))))))
 
+(defun org-remark-posframe--move-and-show (move-fn)
+  "Move with MOVE-FN to a highlight, then preview its note in a posframe.
+MOVE-FN is `org-remark-next' or `org-remark-prev'.  Bind
+`overriding-terminal-local-map' so those commands skip their repeat
+transient map, whose setup signals an error when they are called from
+Lisp rather than from a key sequence; the repeat map would move without
+previewing in any case."
+  (when (let ((overriding-terminal-local-map (make-sparse-keymap)))
+          (funcall move-fn))
+    (org-remark-posframe-show (point))))
+
 ;;;###autoload
 (defun org-remark-posframe-next ()
   "Move to the next Org-remark highlight and preview its note in a posframe."
   (interactive)
-  (when (org-remark-next)
-    (org-remark-posframe-show (point))))
+  (org-remark-posframe--move-and-show #'org-remark-next))
 
 ;;;###autoload
 (defun org-remark-posframe-prev ()
   "Move to the previous Org-remark highlight and preview its note in a posframe."
   (interactive)
-  (when (org-remark-prev)
-    (org-remark-posframe-show (point))))
+  (org-remark-posframe--move-and-show #'org-remark-prev))
 
 ;;;###autoload
 (defun org-remark-posframe-hide ()
