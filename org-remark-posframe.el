@@ -5,7 +5,7 @@
 ;; Author: Ran Wang
 ;; Maintainer: liyanan <liyananfamily@gmail.com>
 ;; URL: https://github.com/unship/org-remark-posframe
-;; Version: 0.2.0
+;; Version: 0.3.0
 ;; Package-Requires: ((emacs "27.1") (org "9.4") (posframe "1.0.0") (org-remark "1.0.0"))
 ;; Keywords: convenience, outlines, hypermedia
 
@@ -41,6 +41,10 @@
 ;;   `org-remark-posframe-prev'  Move to the previous highlight and preview it.
 ;;   `org-remark-posframe-hide'  Hide the preview posframe.
 ;;
+;; Enable the buffer-local minor mode `org-remark-posframe-auto-mode' to
+;; preview notes automatically: the posframe appears when point rests on a
+;; highlight and disappears when point leaves it.
+;;
 ;; Enable the global minor mode `org-remark-posframe-mode' to dismiss the
 ;; preview with `C-g' (`keyboard-quit').
 ;;
@@ -48,6 +52,7 @@
 ;;
 ;;   (with-eval-after-load 'org-remark
 ;;     (org-remark-posframe-mode)
+;;     (add-hook 'org-remark-mode-hook #'org-remark-posframe-auto-mode)
 ;;     (define-key org-remark-mode-map (kbd "C-M-}") #'org-remark-posframe-next)
 ;;     (define-key org-remark-mode-map (kbd "C-M-{") #'org-remark-posframe-prev))
 
@@ -87,8 +92,20 @@ visible.  See `posframe-show' for the available handlers."
   "Background color of the preview posframe when the note is done."
   :type 'color)
 
+(defcustom org-remark-posframe-auto-delay 0.2
+  "Idle seconds before `org-remark-posframe-auto-mode' shows the posframe.
+When point rests on a highlight for this long, its note is previewed.
+A value of 0 previews as soon as Emacs is idle (effectively immediate)."
+  :type 'number)
+
 (defconst org-remark-posframe-buffer " *org-remark-posframe*"
   "Name of the buffer used to render the preview posframe contents.")
+
+(defvar org-remark-posframe--auto-timer nil
+  "Idle timer scheduled by `org-remark-posframe-auto-mode'.")
+
+(defvar org-remark-posframe--auto-shown-id nil
+  "Id of the highlight currently previewed by `org-remark-posframe-auto-mode'.")
 
 (defun org-remark-posframe--note-contents (id)
   "Return the marginal note identified by ID as (CONTENTS . COLOR).
@@ -203,6 +220,65 @@ When enabled, `\\[keyboard-quit]' hides the preview posframe shown by
     (advice-remove 'keyboard-quit #'org-remark-posframe--hide-on-quit)
     (when (fboundp 'keyboard-quit-context+)
       (advice-remove 'keyboard-quit-context+ #'org-remark-posframe--hide-on-quit))))
+
+(defun org-remark-posframe--auto-cancel-timer ()
+  "Cancel the pending `org-remark-posframe-auto-mode' idle timer, if any."
+  (when org-remark-posframe--auto-timer
+    (cancel-timer org-remark-posframe--auto-timer)
+    (setq org-remark-posframe--auto-timer nil)))
+
+(defun org-remark-posframe--auto-show (buffer)
+  "Preview the highlight at point in BUFFER if it is still current.
+Called by the idle timer scheduled in `org-remark-posframe--auto-update'."
+  (when (and (buffer-live-p buffer)
+             (eq buffer (window-buffer (selected-window))))
+    (with-current-buffer buffer
+      (let ((id (get-char-property (point) 'org-remark-id)))
+        (when id
+          (setq org-remark-posframe--auto-shown-id id)
+          (org-remark-posframe-show (point)))))))
+
+(defun org-remark-posframe--auto-update ()
+  "Show or hide the preview posframe based on point.
+Added to `post-command-hook' by `org-remark-posframe-auto-mode'."
+  (org-remark-posframe--auto-cancel-timer)
+  (let ((id (get-char-property (point) 'org-remark-id)))
+    (cond
+     ;; Off any highlight: hide what auto-mode is showing.
+     ((null id)
+      (when org-remark-posframe--auto-shown-id
+        (setq org-remark-posframe--auto-shown-id nil)
+        (org-remark-posframe-hide)))
+     ;; Still on the highlight already previewed: nothing to do.
+     ((equal id org-remark-posframe--auto-shown-id) nil)
+     ;; On a new highlight: drop the old preview, then show after the delay.
+     ;; Always go through an idle timer (even for delay 0) so the posframe is
+     ;; positioned after redisplay -- showing it synchronously in
+     ;; `post-command-hook' would read a stale glyph position for point.
+     (t
+      (when org-remark-posframe--auto-shown-id
+        (setq org-remark-posframe--auto-shown-id nil)
+        (org-remark-posframe-hide))
+      (setq org-remark-posframe--auto-timer
+            (run-with-idle-timer org-remark-posframe-auto-delay nil
+                                 #'org-remark-posframe--auto-show
+                                 (current-buffer)))))))
+
+;;;###autoload
+(define-minor-mode org-remark-posframe-auto-mode
+  "Buffer-local minor mode to auto-preview Org-remark notes in a posframe.
+When point rests on a highlight for `org-remark-posframe-auto-delay'
+seconds, its marginal note appears in a posframe; the posframe is hidden
+when point moves off the highlight.  Add it to `org-remark-mode-hook' to
+enable it in every Org-remark buffer."
+  :lighter " ormk-pf"
+  :group 'org-remark-posframe
+  (if org-remark-posframe-auto-mode
+      (add-hook 'post-command-hook #'org-remark-posframe--auto-update nil :local)
+    (remove-hook 'post-command-hook #'org-remark-posframe--auto-update :local)
+    (org-remark-posframe--auto-cancel-timer)
+    (setq org-remark-posframe--auto-shown-id nil)
+    (org-remark-posframe-hide)))
 
 (provide 'org-remark-posframe)
 

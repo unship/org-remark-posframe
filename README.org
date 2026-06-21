@@ -7,7 +7,9 @@ Org-remark-posframe previews the marginal note
 point in a child frame (posframe).
 
 By default the posframe appears *just below* the highlight, so the highlighted
-text stays visible while you read its note.
+text stays visible while you read its note.  With
+~org-remark-posframe-auto-mode~ it appears automatically when point rests on a
+highlight and disappears when point leaves it.
 
 [[file:./demo-show-posframe.gif]]
 
@@ -46,6 +48,14 @@ See the Org-remark manual for details.
   (define-key org-remark-mode-map (kbd "C-M-{") #'org-remark-posframe-prev))
 #+end_src
 
+** Auto-preview on hover (optional)
+Enable the buffer-local minor mode so the posframe appears automatically when
+point rests on a highlight and disappears when point leaves it.  Add it to
+every Org-remark buffer:
+#+begin_src emacs-lisp
+(add-hook 'org-remark-mode-hook #'org-remark-posframe-auto-mode)
+#+end_src
+
 ** Dismiss with C-g (optional)
 Enable the global minor mode so that ~C-g~ hides the preview posframe:
 #+begin_src emacs-lisp
@@ -53,6 +63,8 @@ Enable the global minor mode so that ~C-g~ hides the preview posframe:
 #+end_src
 
 * Usage
+- ~M-x org-remark-posframe-auto-mode~ — toggle automatic preview while point is
+  on a highlight (appears on hover, hides when you leave).
 - ~M-x org-remark-posframe-show~ — preview the note for the highlight at point.
 - ~M-x org-remark-posframe-next~ — move to the next highlight and preview it.
 - ~M-x org-remark-posframe-prev~ — move to the previous highlight and preview it.
@@ -70,6 +82,8 @@ Click a link inside the posframe to jump to its target.
 - ~org-remark-posframe-todo-color~ / ~org-remark-posframe-done-color~ —
   background tint when the note's heading is a TODO / DONE entry.
 - ~org-remark-posframe-internal-border-width~ — border width in pixels.
+- ~org-remark-posframe-auto-delay~ — idle seconds before
+  ~org-remark-posframe-auto-mode~ shows the posframe (default 0.2).
 
 * Ideas
 ** TODO edit the note in a posframe under point
